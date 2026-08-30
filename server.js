@@ -17,11 +17,18 @@ if (!ADMIN_PASSWORD) console.warn('[CINEMORA] هشدار: ADMIN_PASSWORD تنظ�
 if (!TMDB_TOKEN) console.warn('[CINEMORA] هشدار: TMDB_TOKEN تنظیم نشده. سایت به دیتابیس وصل نمی‌شود.');
 
 // ---------- tiny json "database" (links, stats) ----------
+// make sure the data directory exists even if git didn't track an empty folder
+try { fs.mkdirSync(path.dirname(DB_PATH), { recursive: true }); } catch {}
 function loadDB() {
   try { return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
   catch { return { links: {}, stats: { searches: 0, views: 0, queries: [], topViewed: {} } }; }
 }
-function saveDB(db) { fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2)); }
+function saveDB(db) {
+  try {
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+  } catch (e) { console.error('[CINEMORA] db write failed:', e.message); }
+}
 let db = loadDB();
 const key = (type, id) => `${type}:${id}`;
 
