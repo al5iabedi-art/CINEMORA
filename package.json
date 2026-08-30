@@ -1,0 +1,15 @@
+{
+  "name": "cinemora-2-0-pro",
+  "version": "2.0.0",
+  "description": "CINEMORA — آرشیو سینمایی کلاسیک با جستجوی داستانی و پنل ادمین امن",
+  "main": "server.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5"
+  }
+}
