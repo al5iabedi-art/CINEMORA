@@ -20,8 +20,13 @@ if (!TMDB_TOKEN) console.warn('[CINEMORA] هشدار: TMDB_TOKEN تنظیم نش
 // make sure the data directory exists even if git didn't track an empty folder
 try { fs.mkdirSync(path.dirname(DB_PATH), { recursive: true }); } catch {}
 function loadDB() {
-  try { return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
-  catch { return { links: {}, stats: { searches: 0, views: 0, queries: [], topViewed: {} } }; }
+  try {
+    const raw = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+    raw.comments = raw.comments || {};
+    raw.likes = raw.likes || {};
+    return raw;
+  }
+  catch { return { links: {}, stats: { searches: 0, views: 0, queries: [], topViewed: {} }, comments: {}, likes: {} }; }
 }
 function saveDB(db) {
   try {
@@ -240,13 +245,40 @@ app.get('/api/details', async (req, res) => {
     const d = await tmdb(`/${type}/${id}`, { language: 'fa-IR', append_to_response: 'credits,videos,external_ids,watch/providers' });
     const similar = await tmdb(`/${type}/${id}/similar`, { language: 'fa-IR' }).catch(() => ({ results: [] }));
     const customLinks = db.links[key(type, id)] || [];
+    const comments = db.comments[key(type, id)] || [];
+    const likes = db.likes[key(type, id)] || 0;
     db.stats.views++;
     const vk = key(type, id);
     db.stats.topViewed[vk] = (db.stats.topViewed[vk] || { title: d.title || d.name, count: 0 });
     db.stats.topViewed[vk].count++;
     saveDB(db);
-    res.json({ ...d, _similar: (similar.results || []).slice(0, 12).map(x => ({ ...x, media_type: type })), _customLinks: customLinks });
+    res.json({ ...d, _similar: (similar.results || []).slice(0, 12).map(x => ({ ...x, media_type: type })), _customLinks: customLinks, _comments: comments, _likes: likes });
   } catch (e) { res.status(503).json({ error: e.message }); }
+});
+
+// ---------- likes & comments (public, no admin needed) ----------
+app.post('/api/like', (req, res) => {
+  const { type, id } = req.body || {};
+  if (!['movie', 'tv'].includes(type) || !id) return res.status(400).json({ error: 'BAD_PARAMS' });
+  const k = key(type, id);
+  db.likes[k] = (db.likes[k] || 0) + 1;
+  saveDB(db);
+  res.json({ ok: true, likes: db.likes[k] });
+});
+
+app.post('/api/comments', (req, res) => {
+  const { type, id, name, text } = req.body || {};
+  if (!['movie', 'tv'].includes(type) || !id) return res.status(400).json({ error: 'BAD_PARAMS' });
+  const cleanText = (text || '').toString().trim().slice(0, 500);
+  const cleanName = (name || 'کاربر مهمان').toString().trim().slice(0, 40) || 'کاربر مهمان';
+  if (!cleanText) return res.status(400).json({ error: 'EMPTY_COMMENT' });
+  const k = key(type, id);
+  db.comments[k] = db.comments[k] || [];
+  const comment = { name: cleanName, text: cleanText, ts: Date.now() };
+  db.comments[k].unshift(comment);
+  db.comments[k] = db.comments[k].slice(0, 300);
+  saveDB(db);
+  res.json({ ok: true, comment, count: db.comments[k].length });
 });
 
 // ---------- admin ----------
