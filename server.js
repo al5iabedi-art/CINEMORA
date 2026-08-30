@@ -71,6 +71,22 @@ async function tmdb(pathname, params = {}) {
   return data;
 }
 
+// ---------- translate Persian queries to English (TMDB data is mostly English) ----------
+const isPersian = (s) => /[\u0600-\u06FF]/.test(s);
+const translateCache = new Map();
+async function translateToEnglish(text) {
+  if (!isPersian(text)) return text;
+  if (translateCache.has(text)) return translateCache.get(text);
+  try {
+    const r = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=fa|en');
+    const j = await r.json();
+    const translated = j?.responseData?.translatedText;
+    const result = (translated && translated.length > 1) ? translated : text;
+    translateCache.set(text, result);
+    return result;
+  } catch { return text; }
+}
+
 // ---------- Persian/English keyword extraction + genre map ----------
 const STOP = new Set([
   'یک','یه','و','در','با','از','که','را','به','برای','این','آن','آنها','او','ها','های','هست','است','بود','شود','می','میشه','میشود','هم','تا','یا','روی','بین','بی',
@@ -94,16 +110,18 @@ function matchGenres(q) {
 }
 
 // ---------- multi-stage smart search ----------
-async function smartSearch(q) {
-  const words = extractKeywords(q);
-  const genreIds = matchGenres(q);
-  const term = words.join(' ') || q;
+async function smartSearch(qRaw) {
+  const q = qRaw; // original, possibly Persian — used for genre matching
+  const qEn = await translateToEnglish(qRaw); // English version — used for TMDB matching (its data is mostly English)
+  const words = extractKeywords(qEn);
+  const genreIds = matchGenres(q); // genre words matched against the original text (fa or en)
   const tasks = [];
+  const LANG = 'en-US'; // search against English data for much better matching; details() re-fetches fa-IR for display
 
-  tasks.push(tmdb('/search/movie', { query: q, language: 'fa-IR', include_adult: false }).then(d => ({ src: 'title', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'title', results: [] })));
-  tasks.push(tmdb('/search/tv', { query: q, language: 'fa-IR', include_adult: false }).then(d => ({ src: 'title', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'title', results: [] })));
+  tasks.push(tmdb('/search/movie', { query: qEn, language: LANG, include_adult: false }).then(d => ({ src: 'title', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'title', results: [] })));
+  tasks.push(tmdb('/search/tv', { query: qEn, language: LANG, include_adult: false }).then(d => ({ src: 'title', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'title', results: [] })));
 
-  // theme keyword discovery: look up TMDB keyword ids for a few extracted words
+  // theme keyword discovery: look up TMDB keyword ids for a few extracted (English) words
   const kwIds = [];
   for (const w of words.slice(0, 4)) {
     try {
@@ -113,12 +131,12 @@ async function smartSearch(q) {
     } catch {}
   }
   if (kwIds.length) {
-    tasks.push(tmdb('/discover/movie', { with_keywords: kwIds.join('|'), language: 'fa-IR', sort_by: 'popularity.desc' }).then(d => ({ src: 'keyword', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'keyword', results: [] })));
-    tasks.push(tmdb('/discover/tv', { with_keywords: kwIds.join('|'), language: 'fa-IR', sort_by: 'popularity.desc' }).then(d => ({ src: 'keyword', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'keyword', results: [] })));
+    tasks.push(tmdb('/discover/movie', { with_keywords: kwIds.join('|'), language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'keyword', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'keyword', results: [] })));
+    tasks.push(tmdb('/discover/tv', { with_keywords: kwIds.join('|'), language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'keyword', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'keyword', results: [] })));
   }
   if (genreIds.length) {
-    tasks.push(tmdb('/discover/movie', { with_genres: genreIds.join(','), language: 'fa-IR', sort_by: 'popularity.desc' }).then(d => ({ src: 'genre', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'genre', results: [] })));
-    tasks.push(tmdb('/discover/tv', { with_genres: genreIds.join(','), language: 'fa-IR', sort_by: 'popularity.desc' }).then(d => ({ src: 'genre', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'genre', results: [] })));
+    tasks.push(tmdb('/discover/movie', { with_genres: genreIds.join(','), language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'genre', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'genre', results: [] })));
+    tasks.push(tmdb('/discover/tv', { with_genres: genreIds.join(','), language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'genre', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'genre', results: [] })));
   }
 
   const batches = await Promise.all(tasks);
