@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CINEMORA — پنل مدیریت</title>
+<meta name="robots" content="noindex,nofollow">
+<style>
+:root{--bg:#09090b;--gold:#c9a86a;--gold2:#f0d49a;--text:#f5f0e6;--muted:#aaa49a;--line:#302d29}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Georgia,serif;min-height:100vh}
+.wrap{width:min(900px,92%);margin:auto;padding:40px 0}
+.eyebrow{font:11px Arial;letter-spacing:4px;color:var(--gold)}
+h1{margin:8px 0 25px}
+.card{background:#111116;border:1px solid var(--line);padding:25px;margin-bottom:20px}
+input,select{width:100%;background:#09090b;border:1px solid var(--line);color:#fff;padding:12px;outline:0;margin:6px 0;font:inherit}
+button{background:linear-gradient(135deg,var(--gold2),var(--gold));border:0;padding:12px 20px;color:#18140e;font-weight:bold;cursor:pointer;font:inherit}
+button.ghost{background:#131318;color:#ddd;border:1px solid var(--line)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.status{font:12px Arial;margin:8px 0}
+.ok{color:#9fcf9f}.bad{color:#e4a1a1}
+table{width:100%;border-collapse:collapse;font:13px Arial}
+td,th{padding:8px;border-bottom:1px solid var(--line);text-align:right}
+.stat{display:inline-block;background:#161610;border:1px solid #4a3f26;padding:14px 20px;margin:0 8px 8px 0}
+.stat b{display:block;font-size:22px;color:var(--gold2)}
+.linklist{font:13px Arial;color:#ccc}
+.linklist div{padding:6px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
+.linklist a{color:var(--gold2)}
+.del{background:#2a1414;color:#e4a1a1;border:1px solid #4a2020;padding:4px 10px;cursor:pointer}
+#loginBox{max-width:380px;margin:80px auto}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+const $=x=>document.getElementById(x);
+async function call(url,opts={}){
+  const r=await fetch(url,{...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw Object.assign(new Error(j.error||'ERR'),{status:r.status});
+  return j;
+}
+async function boot(){
+  try{ await call('/api/admin/check'); renderPanel(); }
+  catch(e){ renderLogin(); }
+}
+function renderLogin(){
+  $('app').innerHTML=`<div id="loginBox" class="card">
+    <div class="eyebrow">CINEMORA ADMIN</div>
+    <h1 style="font-size:26px">ورود مدیر</h1>
+    <input id="pw" type="password" placeholder="رمز عبور">
+    <button style="width:100%" onclick="doLogin()">ورود</button>
+    <div class="status" id="loginStatus"></div>
+  </div>`;
+  $('pw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+}
+async function doLogin(){
+  try{ await call('/api/admin/login',{method:'POST',body:JSON.stringify({password:$('pw').value})}); renderPanel(); }
+  catch(e){ $('loginStatus').className='status bad'; $('loginStatus').textContent='رمز اشتباه است.'; }
+}
+async function doLogout(){ await call('/api/admin/logout',{method:'POST'}); renderLogin(); }
+
+async function renderPanel(){
+  $('app').innerHTML=`<div class="eyebrow">CINEMORA ADMIN</div><h1 style="font-size:30px">پنل مدیریت <button class="ghost" style="float:left" onclick="doLogout()">خروج</button></h1>
+  <div class="card"><h3>📊 آمار سایت</h3><div id="statsBox">در حال بارگذاری...</div></div>
+  <div class="card"><h3>🔗 افزودن لینک تماشا</h3>
+    <div class="row">
+      <select id="linkType"><option value="movie">فیلم</option><option value="tv">سریال</option></select>
+      <input id="linkId" placeholder="شناسه TMDB (مثلاً 27205)">
+    </div>
+    <input id="linkTitle" placeholder="عنوان اثر (اختیاری، فقط برای یادآوری خودت)">
+    <div class="row"><input id="linkLabel" placeholder="نام پلتفرم (مثلاً فیلیمو)"><input id="linkUrl" placeholder="لینک مجاز"></div>
+    <button onclick="addLink()">افزودن لینک</button>
+    <div class="status" id="linkStatus"></div>
+  </div>
+  <div class="card"><h3>📁 لینک‌های ثبت‌شده</h3><div id="linksBox" class="linklist">در حال بارگذاری...</div></div>`;
+  loadStats(); loadLinks();
+}
+async function loadStats(){
+  try{
+    const s=await call('/api/admin/stats');
+    $('statsBox').innerHTML=`
+      <div class="stat">جستجوها<b>${s.searches}</b></div>
+      <div class="stat">بازدید جزئیات<b>${s.views}</b></div>
+      <div class="stat">اتصال TMDB<b>${s.connected?'برقرار ✓':'قطع ✕'}</b></div>
+      <h4>پربازدیدترین‌ها</h4>
+      <table><tr><th>عنوان</th><th>بازدید</th></tr>${s.topViewed.map(t=>`<tr><td>${t.title||'—'}</td><td>${t.count}</td></tr>`).join('')||'<tr><td colspan=2>موردی نیست</td></tr>'}</table>
+      <h4>آخرین جستجوها</h4>
+      <table>${s.recentQueries.slice(0,15).map(q=>`<tr><td>${q.q}</td><td>${new Date(q.ts).toLocaleString('fa-IR')}</td></tr>`).join('')||'<tr><td>موردی نیست</td></tr>'}</table>`;
+  }catch(e){ $('statsBox').textContent='خطا در بارگذاری آمار.'; }
+}
+async function loadLinks(){
+  try{
+    const {links}=await call('/api/admin/links');
+    const keys=Object.keys(links);
+    if(!keys.length){ $('linksBox').textContent='هنوز لینکی ثبت نشده.'; return; }
+    $('linksBox').innerHTML=keys.map(k=>{
+      const [type,id]=k.split(':');
+      return links[k].map((l,i)=>`<div><span>${type==='movie'?'فیلم':'سریال'} #${id} ${l.title?'— '+l.title:''} — <a href="${l.url}" target="_blank">${l.label}</a></span><button class="del" onclick="delLink('${type}','${id}',${i})">حذف</button></div>`).join('');
+    }).join('');
+  }catch(e){ $('linksBox').textContent='خطا در بارگذاری لینک‌ها.'; }
+}
+async function addLink(){
+  try{
+    await call('/api/admin/links',{method:'POST',body:JSON.stringify({
+      type:$('linkType').value, id:$('linkId').value.trim(), title:$('linkTitle').value.trim(),
+      label:$('linkLabel').value.trim(), url:$('linkUrl').value.trim()
+    })});
+    $('linkStatus').className='status ok'; $('linkStatus').textContent='✓ اضافه شد.';
+    $('linkId').value=$('linkTitle').value=$('linkLabel').value=$('linkUrl').value='';
+    loadLinks();
+  }catch(e){ $('linkStatus').className='status bad'; $('linkStatus').textContent='✕ خطا: مقادیر را بررسی کن.'; }
+}
+async function delLink(type,id,index){
+  await call('/api/admin/links',{method:'DELETE',body:JSON.stringify({type,id,index})});
+  loadLinks();
+}
+boot();
+</script>
+</body>
+</html>
