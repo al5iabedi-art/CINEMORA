@@ -256,6 +256,21 @@ app.get('/api/details', async (req, res) => {
   } catch (e) { res.status(503).json({ error: e.message }); }
 });
 
+app.get('/api/person', async (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id) return res.status(400).json({ error: 'BAD_PARAMS' });
+    const p = await tmdb(`/person/${id}`, { language: 'fa-IR', append_to_response: 'combined_credits,external_ids' });
+    const bioEn = p.biography ? null : await tmdb(`/person/${id}`, { language: 'en-US' }).then(x => x.biography).catch(() => '');
+    const credits = (p.combined_credits?.cast || [])
+      .filter(c => c.poster_path)
+      .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
+      .slice(0, 24)
+      .map(c => ({ id: c.id, media_type: c.media_type, title: c.title || c.name, poster_path: c.poster_path, date: (c.release_date || c.first_air_date || '').slice(0, 4) }));
+    res.json({ ...p, biography: p.biography || bioEn || '', _credits: credits });
+  } catch (e) { res.status(503).json({ error: e.message }); }
+});
+
 // ---------- likes & comments (public, no admin needed) ----------
 app.post('/api/like', (req, res) => {
   const { type, id } = req.body || {};
