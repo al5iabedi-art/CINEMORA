@@ -100,18 +100,6 @@ async function translateToEnglish(text) {
     return result;
   } catch { return text; }
 }
-async function translateToPersian(text) {
-  if (!text || isPersian(text)) return text;
-  if (translateCache.has('fa:' + text)) return translateCache.get('fa:' + text);
-  try {
-    const r = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text.slice(0, 490)) + '&langpair=en|fa');
-    const j = await r.json();
-    const translated = j?.responseData?.translatedText;
-    const result = (translated && translated.length > 1) ? translated : text;
-    translateCache.set('fa:' + text, result);
-    return result;
-  } catch { return text; }
-}
 
 // ---------- Persian/English keyword extraction + genre map ----------
 const STOP = new Set([
@@ -273,12 +261,7 @@ app.get('/api/details', async (req, res) => {
     db.stats.topViewed[vk] = (db.stats.topViewed[vk] || { title: d.title || d.name, count: 0 });
     db.stats.topViewed[vk].count++;
     saveDB(db);
-    const titleForSearch = d.title || d.name || '';
-    const iranLinks = titleForSearch ? [
-      { label: 'جستجو در فیلیمو', url: 'https://www.filimo.com/search?query=' + encodeURIComponent(titleForSearch), isSearch: true },
-      { label: 'جستجو در نماوا', url: 'https://www.namava.ir/search?q=' + encodeURIComponent(titleForSearch), isSearch: true },
-    ] : [];
-    res.json({ ...d, _similar: (similar.results || []).slice(0, 12).map(x => ({ ...x, media_type: type })), _customLinks: customLinks, _iranLinks: iranLinks, _comments: comments, _likes: likes });
+    res.json({ ...d, _similar: (similar.results || []).slice(0, 12).map(x => ({ ...x, media_type: type })), _customLinks: customLinks, _comments: comments, _likes: likes });
   } catch (e) { res.status(503).json({ error: e.message }); }
 });
 
@@ -287,17 +270,13 @@ app.get('/api/person', async (req, res) => {
     const { id } = req.query;
     if (!id) return res.status(400).json({ error: 'BAD_PARAMS' });
     const p = await tmdb(`/person/${id}`, { language: 'fa-IR', append_to_response: 'combined_credits,external_ids' });
-    let bio = p.biography || '';
-    if (!bio) {
-      bio = await tmdb(`/person/${id}`, { language: 'en-US' }).then(x => x.biography).catch(() => '');
-    }
-    if (bio) bio = await translateToPersian(bio);
+    const bioEn = p.biography ? null : await tmdb(`/person/${id}`, { language: 'en-US' }).then(x => x.biography).catch(() => '');
     const credits = (p.combined_credits?.cast || [])
       .filter(c => c.poster_path)
       .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
       .slice(0, 24)
       .map(c => ({ id: c.id, media_type: c.media_type, title: c.title || c.name, poster_path: c.poster_path, date: (c.release_date || c.first_air_date || '').slice(0, 4) }));
-    res.json({ ...p, biography: bio, _credits: credits });
+    res.json({ ...p, biography: p.biography || bioEn || '', _credits: credits });
   } catch (e) { res.status(503).json({ error: e.message }); }
 });
 
