@@ -62,6 +62,22 @@ async function doLogout(){ await call('/api/admin/logout',{method:'POST'}); rend
 async function renderPanel(){
   $('app').innerHTML=`<div class="eyebrow">CINEMORA ADMIN</div><h1 style="font-size:30px">پنل مدیریت <button class="ghost" style="float:left" onclick="doLogout()">خروج</button></h1>
   <div class="card"><h3>📊 آمار سایت</h3><div id="statsBox">در حال بارگذاری...</div></div>
+  <div class="card"><h3>✏️ ویرایش متن‌های سایت</h3>
+    <label style="font:12px Arial;color:#999">عنوان بالای سایت (بخش خاکستری)</label>
+    <input id="txtEyebrow" placeholder="THE CLASSIC SCREEN ARCHIVE">
+    <label style="font:12px Arial;color:#999">تیتر اصلی (بخش اول، سفید)</label>
+    <input id="txtTitlePlain" placeholder="اسمش یادت نیست؟">
+    <label style="font:12px Arial;color:#999">تیتر اصلی (بخش دوم، طلایی و کج)</label>
+    <input id="txtTitleEm" placeholder="پیداش کن.">
+    <label style="font:12px Arial;color:#999">توضیح زیر تیتر</label>
+    <input id="txtLead" placeholder="توضیح کامل...">
+    <div class="row">
+      <div><label style="font:12px Arial;color:#999">نام در فوتر</label><input id="txtFooterName" placeholder="نام شما"></div>
+      <div><label style="font:12px Arial;color:#999">یوزرنیم اینستاگرام (بدون @)</label><input id="txtFooterInstagram" placeholder="username"></div>
+    </div>
+    <button onclick="saveTexts()">ذخیره متن‌ها</button>
+    <div class="status" id="textsStatus"></div>
+  </div>
   <div class="card"><h3>🔗 افزودن لینک تماشا</h3>
     <div class="row">
       <select id="linkType"><option value="movie">فیلم</option><option value="tv">سریال</option></select>
@@ -73,7 +89,28 @@ async function renderPanel(){
     <div class="status" id="linkStatus"></div>
   </div>
   <div class="card"><h3>📁 لینک‌های ثبت‌شده</h3><div id="linksBox" class="linklist">در حال بارگذاری...</div></div>`;
-  loadStats(); loadLinks();
+  loadStats(); loadLinks(); loadTexts();
+}
+async function loadTexts(){
+  try{
+    const t=await call('/api/admin/texts');
+    $('txtEyebrow').value=t.heroEyebrow||'';
+    $('txtTitlePlain').value=t.heroTitlePlain||'';
+    $('txtTitleEm').value=t.heroTitleEm||'';
+    $('txtLead').value=t.heroLead||'';
+    $('txtFooterName').value=t.footerName||'';
+    $('txtFooterInstagram').value=t.footerInstagram||'';
+  }catch(e){}
+}
+async function saveTexts(){
+  try{
+    await call('/api/admin/texts',{method:'POST',body:JSON.stringify({
+      heroEyebrow:$('txtEyebrow').value, heroTitlePlain:$('txtTitlePlain').value,
+      heroTitleEm:$('txtTitleEm').value, heroLead:$('txtLead').value,
+      footerName:$('txtFooterName').value, footerInstagram:$('txtFooterInstagram').value
+    })});
+    $('textsStatus').className='status ok'; $('textsStatus').textContent='✓ ذخیره شد. سایت اصلی رو رفرش کن تا تغییرات رو ببینی.';
+  }catch(e){ $('textsStatus').className='status bad'; $('textsStatus').textContent='✕ خطا در ذخیره‌سازی.'; }
 }
 async function loadStats(){
   try{

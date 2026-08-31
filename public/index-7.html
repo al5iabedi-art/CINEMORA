@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CINEMORA 2.0</title>
+<style>
+:root{--bg:#09090b;--p:#111116;--p2:#17171d;--gold:#c9a86a;--gold2:#f0d49a;--text:#f5f0e6;--muted:#aaa49a;--line:#302d29}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden;max-width:100%}
+body{margin:0;background:radial-gradient(circle at 15% 0,#30251555,transparent 30%),radial-gradient(circle at 100% 20%,#291d1055,transparent 30%),var(--bg);color:var(--text);font-family:Georgia,"Times New Roman",serif;animation:fadein .5s ease}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+button,input,textarea,select{font:inherit}
+.wrap{width:min(1200px,92%);margin:auto}
+header{position:sticky;top:0;z-index:20;background:#09090bdd;backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.nav{height:72px;display:flex;align-items:center;justify-content:space-between}
+.logo{letter-spacing:5px;color:var(--gold2);font-size:23px;font-weight:bold}
+.logo b{color:#fff}
+.nav .btns{display:flex;gap:8px}
+.nav button{background:#131318;color:#ddd;border:1px solid var(--line);padding:9px 13px;cursor:pointer;border-radius:3px;transition:.2s}
+.nav button:hover{border-color:var(--gold);color:var(--gold2)}
+.hero{text-align:center;padding:70px 0 40px;animation:up .6s ease}
+@keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.eyebrow{font:11px Arial,sans-serif;letter-spacing:4px;color:var(--gold)}
+h1{font-size:clamp(42px,7vw,80px);line-height:1;margin:17px 0}
+h1 em{color:var(--gold2);font-weight:normal;font-style:italic}
+.lead{font:15px Arial,sans-serif;color:var(--muted);line-height:1.9;max-width:780px;margin:0 auto 28px}
+.search{background:linear-gradient(145deg,#19191f,#0d0d10);border:1px solid #51452f;padding:8px;display:flex;gap:8px;box-shadow:0 20px 70px #0008}
+.search textarea{flex:1;background:transparent;border:0;outline:0;color:#fff;min-height:72px;padding:12px;resize:vertical;font-family:Arial,sans-serif}
+.gold{background:linear-gradient(135deg,var(--gold2),var(--gold));border:0;padding:0 26px;color:#18140e;font-weight:bold;cursor:pointer;border-radius:3px;transition:.2s}
+.gold:hover{filter:brightness(1.08)}
+.gold:disabled{opacity:.5;cursor:default}
+.chips{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:14px}
+.chip,.ghost{background:#111116;border:1px solid var(--line);color:#bbb;padding:8px 12px;cursor:pointer;border-radius:3px;transition:.2s}
+.chip:hover,.ghost:hover{border-color:var(--gold);color:var(--gold2)}
+.section{padding:28px 0}
+.head{display:flex;justify-content:space-between;align-items:end;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+.head h2{margin:0;font-size:28px}
+.muted{font:12px Arial;color:#777}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.tools>*{background:#111116;color:#ddd;border:1px solid var(--line);padding:9px;border-radius:3px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:18px}
+.card{background:#111116;border:1px solid var(--line);cursor:pointer;transition:.25s;overflow:hidden;position:relative;animation:cardin .35s ease}
+@keyframes cardin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.card:hover{transform:translateY(-6px);border-color:#7c6845;box-shadow:0 20px 45px #0008}
+.poster{aspect-ratio:2/3;background:#1b1b20}
+.poster img{width:100%;height:100%;object-fit:cover}
+.cardbody{padding:11px}
+.title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{display:flex;justify-content:space-between;margin-top:6px;font:11px Arial;color:#888}
+.rating{color:var(--gold2)}
+.badge{position:absolute;top:8px;right:8px;background:#050505dd;border:1px solid #ffffff22;padding:5px;font:10px Arial;letter-spacing:1px}
+.clue{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(0deg,#000d,transparent);padding:16px 8px 6px;font:10px Arial;color:var(--gold2);opacity:0;transition:.2s}
+.card:hover .clue{opacity:1}
+.loader,.empty{grid-column:1/-1;text-align:center;padding:55px;color:#888;border:1px dashed #333}
+.loader:after{content:"";display:block;width:25px;height:25px;border:2px solid #444;border-top-color:var(--gold);border-radius:50%;margin:15px auto;animation:r 1s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+#detailPage{background:var(--bg);animation:fadein .25s ease}
+#detailPage .close{margin:10px 0}
+.close{position:absolute;left:12px;top:12px;z-index:2}
+.detail{max-width:720px;margin:auto;padding:20px 18px 60px}
+.diconbar{display:flex;gap:18px;align-items:center;margin-bottom:18px}
+.diconbtn{display:flex;align-items:center;gap:6px;background:#111116;border:1px solid var(--line);color:#ccc;padding:9px 14px;border-radius:20px;cursor:pointer;font:13px Arial;transition:.2s}
+.diconbtn:hover{border-color:var(--gold);color:var(--gold2)}
+.diconbtn.active{border-color:var(--gold);color:var(--gold2);background:#1c1710}
+.dposterWrap{display:flex;justify-content:center;position:relative;margin-bottom:18px}
+.dposter{width:220px;border-radius:6px;overflow:hidden;box-shadow:0 20px 60px #0009;position:relative}
+.dposter img{width:100%;display:block;object-fit:cover;aspect-ratio:2/3}
+.druntime{position:absolute;top:10px;left:10px;background:#000a;border:1px solid #ffffff22;padding:6px 10px;font:11px Arial;color:#eee;border-radius:20px}
+.dratingrow{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:6px}
+.imdbpill{background:var(--gold2);color:#18140e;font:bold 12px Arial;padding:4px 8px;border-radius:3px;letter-spacing:1px}
+.dbody{text-align:center}
+.dbody h2{font-size:30px;margin:8px 0 2px}
+.tag{color:var(--gold);font-style:italic;font-size:13px}
+.hashrow{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:14px 0}
+.hash{background:#111116;border:1px solid var(--line);color:var(--gold2);padding:6px 14px;border-radius:20px;font:12px Arial}
+.sectionhead{display:flex;align-items:center;gap:12px;margin:30px 0 14px}
+.sectionhead h3{margin:0;font-size:16px;color:var(--gold2);white-space:nowrap}
+.sectionhead .bar{flex:1;height:2px;background:linear-gradient(90deg,var(--gold),transparent)}
+.overview{font:14px/2 Arial;color:#c8c4bc;text-align:right}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;text-align:right}
+.stat{border:1px solid var(--line);padding:11px;font:12px Arial;color:#888}
+.stat b{display:block;color:#fff;margin-top:5px}
+.castrow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.castpill{background:#111116;border:1px solid var(--line);color:#ddd;padding:8px 14px;border-radius:20px;font:12px Arial;cursor:pointer;transition:.2s}
+.castpill:hover{border-color:var(--gold);color:var(--gold2)}
+.personhead{display:flex;gap:16px;align-items:flex-start;margin-bottom:10px}
+.personphoto{width:120px;flex-shrink:0;border-radius:6px;overflow:hidden;box-shadow:0 15px 40px #0009}
+.personphoto img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block}
+.personinfo{flex:1;text-align:right}
+.personinfo h2{font-size:24px;margin:0 0 8px}
+.personmeta{font:13px Arial;color:#999;line-height:2}
+.personmeta b{color:#ddd}
+.filmo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+.director{font:13px Arial;color:#bbb;margin-top:10px}
+.watchrow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.watchpill{background:#111116;border:1px solid var(--line);padding:8px 14px;font:12px Arial;color:#ccc;border-radius:20px;text-decoration:none}
+.watchpill:hover{border-color:var(--gold);color:var(--gold2)}
+.similar-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+.simcard{cursor:pointer;background:#111116;border:1px solid var(--line)}
+.simcard img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block}
+.simcard span{display:block;padding:6px;font:11px Arial;color:#bbb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.commentbox{background:#111116;border:1px solid var(--line);padding:14px;margin-bottom:16px}
+.commentbox input,.commentbox textarea{width:100%;background:#09090b;border:1px solid var(--line);color:#fff;padding:10px;font:13px Arial;margin-bottom:8px;border-radius:3px}
+.commentbox textarea{min-height:70px;resize:vertical}
+.commentlist{text-align:right}
+.commentitem{border-bottom:1px solid var(--line);padding:12px 0}
+.commentitem b{color:var(--gold2);font:13px Arial}
+.commentitem p{margin:5px 0 0;font:13px Arial;color:#ccc;line-height:1.8}
+.commentitem span{font:10px Arial;color:#666}
+.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.trailer{width:100%;max-width:720px;aspect-ratio:16/9;border:0;display:block;margin:auto}
+.cluebox{background:#161610;border:1px solid #4a3f26;padding:12px 14px;font:13px Arial;color:#d8cba2;line-height:1.9;text-align:right}
+.cluebox div:before{content:"✦ ";color:var(--gold)}
+footer{text-align:center;border-top:1px solid var(--line);padding:30px;color:#666;font:11px Arial;margin-top:50px}
+footer a{color:var(--gold);text-decoration:none}
+@media(max-width:650px){.nav button{padding:7px}.hero{padding-top:45px}.search{flex-direction:column}.gold{height:52px}.grid{grid-template-columns:repeat(2,1fr);gap:10px}}
+</style>
+</head>
+<body>
+<header><div class="wrap nav">
+  <div class="logo">CINE<b>MORA</b> <small style="font:10px Arial;color:#777">2.0</small></div>
+  <div class="btns">
+    <button onclick="tab('discover')">🏛 آرشیو</button>
+    <button onclick="showDiscovery()">🔮 پیشنهاد</button>
+    <button onclick="showFavs()">♥ ذخیره‌ها</button>
+    <button onclick="showHistory()">🕘 تاریخچه</button>
+  </div>
+</div></header>
+
+<main class="wrap" id="mainView">
+<section class="hero">
+<div class="eyebrow" id="txtEyebrow">THE CLASSIC SCREEN ARCHIVE</div>
+<h1><span id="txtTitle">اسمش یادت نیست؟</span> <em id="txtTitleEm">پیداش کن.</em></h1>
+<p class="lead" id="txtLead">داستان، صحنه، شخصیت یا هر چیزی که از یک فیلم، سریال، انیمه یا انیمیشن یادت مانده را بنویس؛ به فارسی یا انگلیسی، بدون نیاز به اسم اثر. CINEMORA با چند لایه تحلیل، نزدیک‌ترین آثار را پیدا می‌کند و دلیل هر پیشنهاد را نشان می‌دهد.</p>
+<div class="search"><textarea id="q" placeholder="مثلاً: یه پسر وارد دنیایی میشه که انسان‌ها با موجودات عجیب می‌جنگن و باید راه برگشت رو پیدا کنه..."></textarea><button class="gold" id="searchBtn" onclick="search()">جستجوی داستانی ✦</button></div>
+<div class="chips">
+<button class="chip" onclick="fill('یک کارآگاه دنبال قاتلی مرموز در یک شهر تاریک است')">کارآگاهی</button>
+<button class="chip" onclick="fill('یک نوجوان قدرت‌های عجیب پیدا می‌کند')">فانتزی</button>
+<button class="chip" onclick="fill('گروهی از انسان‌ها با موجودات فضایی روبه‌رو می‌شوند')">علمی‌تخیلی</button>
+<button class="chip" onclick="fill('یک خانواده در خانه‌ای مرموز با اتفاقات عجیب روبه‌رو می‌شود')">ترسناک</button>
+<button class="chip" onclick="fill('a lonely robot falls in love while cleaning an abandoned earth')">Sci-fi (EN)</button>
+</div>
+</section>
+
+<section class="section" id="results">
+<div class="head"><div><h2 id="heading">محبوب‌ترین‌ها</h2><div class="muted" id="counter"></div></div></div>
+<div class="tools">
+<select id="type" onchange="onFilterChange()">
+  <option value="all">فیلم + سریال</option>
+  <option value="movie">فیلم</option>
+  <option value="tv">سریال</option>
+  <option value="anime">انیمه</option>
+  <option value="animation">انیمیشن</option>
+</select>
+<select id="sort" onchange="onFilterChange()">
+  <option value="popularity.desc">محبوبیت</option>
+  <option value="vote_average.desc">بالاترین امتیاز</option>
+  <option value="primary_release_date.desc">جدیدترین</option>
+</select>
+<select id="rating" onchange="onFilterChange()"><option value="0">هر امتیاز</option><option value="7">۷+</option><option value="8">۸+</option></select>
+<button class="ghost" onclick="onFilterChange()">↻ تازه‌سازی</button>
+</div>
+<div id="grid" class="grid"></div>
+<div id="more" style="text-align:center;margin:25px"></div>
+</section>
+</main>
+
+<footer>
+CINEMORA 2.0 • اطلاعات و تصاویر از TMDB • این سایت سرویس پخش فیلم نیست.<br>
+<span style="opacity:.8">ساخته‌شده توسط <b style="color:var(--gold2)" id="txtFooterName">علی عابدی</b> · <a href="https://instagram.com/aliabedih" id="txtFooterInsta" target="_blank" rel="noopener">اینستاگرام</a></span>
+</footer>
+
+<div id="detailPage" style="display:none">
+  <div class="wrap" style="padding-top:16px"><button class="ghost" onclick="closeModal()">→ بازگشت به آرشیو</button></div>
+  <div id="detail"></div>
+</div>
+
+<script>
+const $=x=>document.getElementById(x);
+const img=p=>p?'https://image.tmdb.org/t/p/w500'+p:'https://placehold.co/500x750/18181e/c9a86a?text=NO+POSTER';
+const back=p=>p?'https://image.tmdb.org/t/p/w1280'+p:null;
+const avatar=p=>p?'https://image.tmdb.org/t/p/w185'+p:'https://placehold.co/185x185/18181e/c9a86a?text=USER';
+const S={page:1,total:1,items:[],mode:'discover',
+  favs:JSON.parse(localStorage.getItem('cine_favs2')||'[]'),
+  history:JSON.parse(localStorage.getItem('cine_hist')||'[]')};
+
+async function api(path,params={}){
+  const u=new URL(path,location.origin);Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
+  const r=await fetch(u);const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw Object.assign(new Error(j.error||'ERR'),{code:j.error});
+  return j;
+}
+function fill(x){$('q').value=x;$('q').focus()}
+function tab(t){S.mode='discover';S.page=1;$('heading').textContent='آرشیو زنده';discover(1)}
+
+function card(x){
+  const type=x.media_type||'movie',name=x.title||x.name||'بدون عنوان',date=(x.release_date||x.first_air_date||'').slice(0,4);
+  const typeLabel={movie:'FILM',tv:'SERIES'}[type]||'FILM';
+  const clue=(x._clues&&x._clues[0])?`<div class="clue">${x._clues[0]}</div>`:'';
+  return `<article class="card" onclick="details(${x.id},'${type}')"><div class="poster"><img loading="lazy" src="${img(x.poster_path)}" onerror="this.onerror=null;this.src='https://placehold.co/500x750/18181e/c9a86a?text=NO+POSTER'" alt="">${clue}<span class="badge">${typeLabel}</span></div><div class="cardbody"><div class="title">${name}</div><div class="meta"><span>${date||'—'}</span><span class="rating">★ ${(x.vote_average||0).toFixed(1)}</span></div></div></article>`;
+}
+S.clueIndex={};
+function render(list,append=false){
+  if(!append)$('grid').innerHTML='';
+  if(!list.length && !append){$('grid').innerHTML='<div class="empty">چیزی پیدا نشد. عبارت دیگری امتحان کن یا فیلترها را تغییر بده.</div>';$('counter').textContent='';return}
+  list.forEach(x=>{ if(x._clues) S.clueIndex[(x.media_type||'movie')+':'+x.id]=x._clues });
+  $('grid').insertAdjacentHTML('beforeend',list.map(card).join(''));
+  $('counter').textContent=S.mode==='discover'?`صفحه ${S.page} از ${S.total}`:`${S.totalResults||list.length} نتیجه`;
+}
+function more(){
+  if(S.page<S.total) $('more').innerHTML=`<button class="gold" style="height:45px" onclick="loadMore()">نمایش آثار بیشتر</button>`;
+  else $('more').innerHTML='';
+}
+function loadMore(){ S.mode==='discover'?discover(S.page+1):searchPage(S.page+1) }
+
+async function discover(page=1){
+  S.mode='discover';S.page=page;$('more').innerHTML='';
+  $('grid').innerHTML='<div class="loader">در حال جستجوی آرشیو...</div>';
+  try{
+    const type=$('type').value,sort=$('sort').value,min=$('rating').value;
+    const d=await api('/api/discover',{type,sort,min,page});
+    S.total=d.total_pages||1;S.items=d.results||[];
+    render(S.items, page>1); more();
+  }catch(e){ apiDownState(e) }
+}
+function onFilterChange(){ discover(1) }
+
+function smartHeading(){ $('heading').textContent='نزدیک‌ترین نتایج به توضیح شما' }
+async function search(){
+  const q=$('q').value.trim(); if(!q) return;
+  S.mode='search';S.page=1;
+  addHistory(q);
+  smartHeading();
+  $('searchBtn').disabled=true;
+  $('grid').innerHTML='<div class="loader">در حال تحلیل داستان و پیدا کردن نزدیک‌ترین آثار...</div>';
+  scrollTo({top:$('results').offsetTop-70,behavior:'smooth'});
+  try{
+    const d=await api('/api/search',{q,page:1});
+    S.total=d.total_pages||1;S.totalResults=d.total_results;S.lastQuery=q;S.items=d.results||[];
+    render(S.items); more();
+  }catch(e){ apiDownState(e) } finally{ $('searchBtn').disabled=false }
+}
+async function searchPage(page){
+  S.page=page;
+  try{
+    const d=await api('/api/search',{q:S.lastQuery,page});
+    render(d.results||[], true); more();
+  }catch(e){}
+}
+function apiDownState(e){
+  const msg = e.code==='EMPTY_QUERY' ? 'یک توضیح وارد کن.' :
+    'اتصال به آرشیو در حال حاضر برقرار نشد. کمی بعد دوباره امتحان کن.';
+  $('grid').innerHTML=`<div class="empty">${msg}</div>`;$('counter').textContent='';$('more').innerHTML='';
+}
+function addHistory(q){
+  S.history=S.history.filter(x=>x!==q); S.history.unshift(q); S.history=S.history.slice(0,20);
+  localStorage.setItem('cine_hist',JSON.stringify(S.history));
+}
+function showHistory(){
+  S.mode='history';$('heading').textContent='تاریخچه جستجو';$('more').innerHTML='';
+  if(!S.history.length){$('grid').innerHTML='<div class="empty">تاریخچه‌ای وجود ندارد.</div>';$('counter').textContent='';return}
+  $('grid').innerHTML='';
+  $('grid').outerHTML=`<div id="grid" class="grid" style="grid-template-columns:1fr"></div>`;
+  $('grid').innerHTML=S.history.map(q=>`<button class="ghost" style="text-align:right;padding:14px" onclick="fill('${q.replace(/'/g,"\\'")}');tabToTop()">${q}</button>`).join('');
+  $('counter').textContent='';
+}
+function tabToTop(){ scrollTo({top:0,behavior:'smooth'}) }
+
+async function showDiscovery(){
+  S.mode='discovery';$('heading').textContent='🔮 پیشنهاد امروز';$('more').innerHTML='';
+  $('grid').innerHTML='<div class="loader">در حال چیدن پیشنهادها...</div>';
+  try{ const d=await api('/api/discovery'); render(d.results||[]); }
+  catch(e){ apiDownState(e) }
+}
+
+async function showFavs(){
+  S.mode='favs';$('heading').textContent='علاقه‌مندی‌های من';$('more').innerHTML='';
+  if(!S.favs.length){$('grid').innerHTML='<div class="empty">هنوز اثری ذخیره نکرده‌ای.</div>';$('counter').textContent='';return}
+  $('grid').innerHTML='<div class="loader">در حال بارگذاری...</div>';
+  try{
+    const items=await Promise.all(S.favs.map(f=>api('/api/details',{type:f.type,id:f.id}).then(d=>({...d,media_type:f.type})).catch(()=>null)));
+    render(items.filter(Boolean));
+  }catch(e){ apiDownState(e) }
+}
+function toggleFav(id,type){
+  const i=S.favs.findIndex(x=>x.id===id&&x.type===type);
+  if(i>=0) S.favs.splice(i,1); else S.favs.push({id,type});
+  localStorage.setItem('cine_favs2',JSON.stringify(S.favs));
+  details(id,type);
+}
+
+async function details(id,type){
+  S.currentItem={id,type};
+  $('mainView').style.display='none';
+  $('detailPage').style.display='block';
+  window.scrollTo(0,0);
+  $('detail').innerHTML='<div class="loader">در حال ساخت پرونده اثر...</div>';
+  try{
+    const d=await api('/api/details',{type,id});
+    const name=d.title||d.name,date=(d.release_date||d.first_air_date||'').slice(0,4);
+    const countries=(d.production_countries||[]).map(x=>x.name);
+    const genres=(d.genres||[]).map(x=>x.name);
+    const runtime=d.runtime||d.episode_run_time?.[0];
+    const director=(d.credits?.crew||[]).find(c=>c.job==='Director')?.name || (d.created_by||[])[0]?.name || '';
+    const cast=(d.credits?.cast||[]).slice(0,8);
+    const trailer=(d.videos?.results||[]).find(v=>v.site==='YouTube'&&v.type==='Trailer')||(d.videos?.results||[]).find(v=>v.site==='YouTube');
+    const fav=S.favs.some(x=>x.id===id&&x.type===type);
+    const providers=d['watch/providers']?.results?.IR || d['watch/providers']?.results?.US;
+    const flatrate=(providers?.flatrate||[]).map(p=>p.provider_name);
+    const customLinks=d._customLinks||[];
+    const comments=d._comments||[];
+    const likes=d._likes||0;
+    d._searchClues=S.clueIndex[type+':'+id];
+
+    const hashTags=[...countries,...genres].slice(0,5).map(t=>`<span class="hash">#${t}</span>`).join('');
+    const watchHtml = (flatrate.length||customLinks.length) ? `
+      ${flatrate.map(n=>`<span class="watchpill">${n}</span>`).join('')}
+      ${customLinks.map(l=>`<a class="watchpill" href="${l.url}" target="_blank" rel="noopener">${l.label} ↗</a>`).join('')}
+    ` : `<span class="watchpill">اطلاعاتی ثبت نشده</span>`;
+    const clueHtml = d._searchClues ? `<div class="sectionhead"><h3>🎯 CINEMORA Clues</h3><div class="bar"></div></div><div class="cluebox">${d._searchClues.map(c=>`<div>${c}</div>`).join('')}</div>` : '';
+    const similarHtml = (d._similar&&d._similar.length) ? `<div class="sectionhead"><h3>🎞 آثار مشابه</h3><div class="bar"></div></div><div class="similar-grid">${d._similar.map(s=>`<div class="simcard" onclick="details(${s.id},'${s.media_type}')"><img src="${img(s.poster_path)}" onerror="this.onerror=null;this.src='https://placehold.co/300x450/18181e/c9a86a?text=NO+POSTER'"><span>${s.title||s.name}</span></div>`).join('')}</div>` : '';
+    const commentListHtml = comments.length ? comments.map(c=>`<div class="commentitem"><b>${c.name}</b><p>${c.text}</p><span>${new Date(c.ts).toLocaleDateString('fa-IR')}</span></div>`).join('') : '<p class="muted" style="text-align:center">هنوز نظری ثبت نشده، اولین نفر باش.</p>';
+
+    $('detail').innerHTML=`<div class="detail">
+      <div class="diconbar">
+        <button class="diconbtn" onclick="shareItem('${name.replace(/'/g,"\\'")}')">↗ اشتراک</button>
+        <button class="diconbtn ${fav?'active':''}" id="favBtn" onclick="toggleFav(${id},'${type}')">${fav?'★':'☆'} ذخیره</button>
+        <button class="diconbtn" id="likeBtn" onclick="likeItem(${id},'${type}')">♥ <span id="likeCount">${likes}</span></button>
+        <button class="diconbtn" onclick="document.getElementById('commentsSection').scrollIntoView({behavior:'smooth'})">💬 <span>${comments.length}</span></button>
+      </div>
+      <div class="dposterWrap"><div class="dposter">
+        <img src="${img(d.poster_path)}" onerror="this.onerror=null;this.src='https://placehold.co/500x750/18181e/c9a86a?text=NO+POSTER'">
+        ${runtime?`<span class="druntime">${runtime} دقیقه</span>`:''}
+      </div></div>
+      <div class="dbody">
+        <div class="dratingrow"><span class="imdbpill">TMDB</span><b>${(d.vote_average||0).toFixed(1)}/10</b></div>
+        <h2>${name}${date?' '+date:''}</h2>
+        <div class="tag">${d.tagline||(type==='movie'?'پرونده سینمایی':'پرونده سریالی')}</div>
+        <div class="hashrow">${hashTags}</div>
+
+        <div class="sectionhead"><h3>درباره ${type==='movie'?'فیلم':'سریال'}</h3><div class="bar"></div></div>
+        <p class="overview">${d.overview||'خلاصه‌ای ثبت نشده است.'}</p>
+
+        ${clueHtml}
+
+        <div class="sectionhead"><h3>هنرمندان</h3><div class="bar"></div></div>
+        <div class="castrow">${cast.map(c=>`<span class="castpill" onclick="personDetails(${c.id})">${c.name}</span>`).join('')||'<span class="muted">ثبت نشده</span>'}</div>
+        ${director?`<div class="director">کارگردان: ${director}</div>`:''}
+
+        <div class="actions">${d.external_ids?.imdb_id?`<button class="ghost" onclick="window.open('https://www.imdb.com/title/${d.external_ids.imdb_id}','_blank')">IMDb ↗</button>`:''}</div>
+        ${trailer?`<div class="sectionhead"><h3>▶ تریلر</h3><div class="bar"></div></div><iframe class="trailer" src="https://www.youtube.com/embed/${trailer.key}" allowfullscreen></iframe>`:''}
+
+        <div class="sectionhead"><h3>📺 کجا ببینمش؟</h3><div class="bar"></div></div>
+        <div class="watchrow">${watchHtml}</div>
+
+        ${similarHtml}
+
+        <div class="sectionhead" id="commentsSection"><h3>💬 نظرات (${comments.length})</h3><div class="bar"></div></div>
+        <div class="commentbox">
+          <input id="commentName" placeholder="نام شما (اختیاری)">
+          <textarea id="commentText" placeholder="نظرت رو درباره این اثر بنویس..."></textarea>
+          <button class="gold" style="width:100%;height:44px" onclick="submitComment(${id},'${type}')">ثبت نظر</button>
+        </div>
+        <div class="commentlist" id="commentList">${commentListHtml}</div>
+      </div>
+    </div>`;
+  }catch(e){ $('detail').innerHTML='<div class="empty">جزئیات دریافت نشد. اتصال را بررسی کن.</div>' }
+}
+function calcAge(birthday,deathday){
+  if(!birthday) return null;
+  const b=new Date(birthday), end=deathday?new Date(deathday):new Date();
+  let age=end.getFullYear()-b.getFullYear();
+  const m=end.getMonth()-b.getMonth();
+  if(m<0||(m===0&&end.getDate()<b.getDate())) age--;
+  return age;
+}
+async function personDetails(id){
+  $('mainView').style.display='none';
+  $('detailPage').style.display='block';
+  window.scrollTo(0,0);
+  $('detail').innerHTML='<div class="loader">در حال بارگذاری پرونده هنرمند...</div>';
+  try{
+    const p=await api('/api/person',{id});
+    const age=calcAge(p.birthday,p.deathday);
+    const ageLabel=p.deathday ? `${age} سال (درگذشته)` : (age!=null ? `${age} سال` : '—');
+    const credits=p._credits||[];
+    $('detail').innerHTML=`<div class="detail">
+      <div class="personhead">
+        <div class="personphoto"><img src="${avatar(p.profile_path)}" onerror="this.onerror=null;this.src='https://placehold.co/300x450/18181e/c9a86a?text=NO+PHOTO'"></div>
+        <div class="personinfo">
+          <h2>${p.name||''}</h2>
+          <div class="personmeta">
+            <div>سن: <b>${ageLabel}</b></div>
+            ${p.place_of_birth?`<div>محل تولد: <b>${p.place_of_birth}</b></div>`:''}
+            ${p.known_for_department?`<div>حرفه: <b>${p.known_for_department}</b></div>`:''}
+          </div>
+        </div>
+      </div>
+      ${p.biography?`<div class="sectionhead"><h3>بیوگرافی</h3><div class="bar"></div></div><p class="overview">${p.biography}</p>`:''}
+      <div class="sectionhead"><h3>🎬 آثار</h3><div class="bar"></div></div>
+      <div class="filmo-grid">${credits.map(c=>`<div class="simcard" onclick="details(${c.id},'${c.media_type}')"><img src="${img(c.poster_path)}" onerror="this.onerror=null;this.src='https://placehold.co/300x450/18181e/c9a86a?text=NO+POSTER'"><span>${c.title}${c.date?' ('+c.date+')':''}</span></div>`).join('')||'<span class="muted">اثری ثبت نشده</span>'}</div>
+    </div>`;
+  }catch(e){ $('detail').innerHTML='<div class="empty">اطلاعات هنرمند دریافت نشد. اتصال را بررسی کن.</div>' }
+}
+function shareItem(name){
+  const url=location.href;
+  if(navigator.share){ navigator.share({title:name,url}).catch(()=>{}); }
+  else { navigator.clipboard?.writeText(url); alert('لینک کپی شد'); }
+}
+async function likeItem(id,type){
+  const likedKey='cine_liked_'+type+'_'+id;
+  if(localStorage.getItem(likedKey)) return;
+  try{
+    const r=await fetch('/api/like',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,id})});
+    const j=await r.json();
+    $('likeCount').textContent=j.likes;
+    $('likeBtn').classList.add('active');
+    localStorage.setItem(likedKey,'1');
+  }catch(e){}
+}
+async function submitComment(id,type){
+  const name=$('commentName').value.trim();
+  const text=$('commentText').value.trim();
+  if(!text) return;
+  try{
+    const r=await fetch('/api/comments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,id,name,text})});
+    const j=await r.json();
+    if(j.ok){
+      const item=document.createElement('div');
+      item.className='commentitem';
+      item.innerHTML=`<b>${j.comment.name}</b><p>${j.comment.text}</p><span>${new Date(j.comment.ts).toLocaleDateString('fa-IR')}</span>`;
+      const list=$('commentList');
+      if(list.querySelector('.muted')) list.innerHTML='';
+      list.insertBefore(item,list.firstChild);
+      $('commentText').value='';
+    }
+  }catch(e){}
+}
+function closeModal(){
+  $('detailPage').style.display='none';
+  $('mainView').style.display='block';
+  window.scrollTo(0,0);
+}
+$('q').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();search()}})
+async function applySiteTexts(){
+  try{
+    const t=await api('/api/texts');
+    if(t.heroEyebrow) $('txtEyebrow').textContent=t.heroEyebrow;
+    if(t.heroTitlePlain) $('txtTitle').textContent=t.heroTitlePlain;
+    if(t.heroTitleEm) $('txtTitleEm').textContent=t.heroTitleEm;
+    if(t.heroLead) $('txtLead').textContent=t.heroLead;
+    if(t.footerName) $('txtFooterName').textContent=t.footerName;
+    if(t.footerInstagram){ $('txtFooterInsta').href='https://instagram.com/'+t.footerInstagram; }
+  }catch(e){}
+}
+applySiteTexts();
+discover(1);
+</script>
+</body>
+</html>
