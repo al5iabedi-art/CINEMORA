@@ -19,14 +19,23 @@ if (!TMDB_TOKEN) console.warn('[CINEMORA] هشدار: TMDB_TOKEN تنظیم نش
 // ---------- tiny json "database" (links, stats) ----------
 // make sure the data directory exists even if git didn't track an empty folder
 try { fs.mkdirSync(path.dirname(DB_PATH), { recursive: true }); } catch {}
+const DEFAULT_TEXTS = {
+  heroEyebrow: 'THE CLASSIC SCREEN ARCHIVE',
+  heroTitlePlain: 'اسمش یادت نیست؟',
+  heroTitleEm: 'پیداش کن.',
+  heroLead: 'داستان، صحنه، شخصیت یا هر چیزی که از یک فیلم، سریال، انیمه یا انیمیشن یادت مانده را بنویس؛ به فارسی یا انگلیسی، بدون نیاز به اسم اثر. CINEMORA با چند لایه تحلیل، نزدیک‌ترین آثار را پیدا می‌کند و دلیل هر پیشنهاد را نشان می‌دهد.',
+  footerName: 'علی عابدی',
+  footerInstagram: 'aliabedih',
+};
 function loadDB() {
   try {
     const raw = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
     raw.comments = raw.comments || {};
     raw.likes = raw.likes || {};
+    raw.texts = { ...DEFAULT_TEXTS, ...(raw.texts || {}) };
     return raw;
   }
-  catch { return { links: {}, stats: { searches: 0, views: 0, queries: [], topViewed: {} }, comments: {}, likes: {} }; }
+  catch { return { links: {}, stats: { searches: 0, views: 0, queries: [], topViewed: {} }, comments: {}, likes: {}, texts: { ...DEFAULT_TEXTS } }; }
 }
 function saveDB(db) {
   try {
@@ -294,6 +303,18 @@ app.post('/api/comments', (req, res) => {
   db.comments[k] = db.comments[k].slice(0, 300);
   saveDB(db);
   res.json({ ok: true, comment, count: db.comments[k].length });
+});
+
+// ---------- editable site texts ----------
+app.get('/api/texts', (req, res) => res.json(db.texts));
+app.get('/api/admin/texts', requireAdmin, (req, res) => res.json(db.texts));
+app.post('/api/admin/texts', requireAdmin, (req, res) => {
+  const body = req.body || {};
+  Object.keys(DEFAULT_TEXTS).forEach(k => {
+    if (typeof body[k] === 'string') db.texts[k] = body[k].slice(0, 2000);
+  });
+  saveDB(db);
+  res.json({ ok: true, texts: db.texts });
 });
 
 // ---------- admin ----------
