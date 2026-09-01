@@ -88,17 +88,39 @@ async function tmdb(pathname, params = {}) {
 // ---------- translate Persian queries to English (TMDB data is mostly English) ----------
 const isPersian = (s) => /[\u0600-\u06FF]/.test(s);
 const translateCache = new Map();
-async function translateToEnglish(text) {
-  if (!isPersian(text)) return text;
-  if (translateCache.has(text)) return translateCache.get(text);
+async function translateRaw(text, from, to) {
+  // Primary: Google's public translate endpoint (no key, generous limits)
   try {
-    const r = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=fa|en');
+    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + from + '&tl=' + to + '&dt=t&q=' + encodeURIComponent(text);
+    const r = await fetch(url);
+    if (r.ok) {
+      const j = await r.json();
+      const translated = (j?.[0] || []).map(seg => seg[0]).join('');
+      if (translated && translated.trim().length > 0) return translated;
+    }
+  } catch {}
+  // Fallback: MyMemory
+  try {
+    const r = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text.slice(0, 490)) + '&langpair=' + from + '|' + to);
     const j = await r.json();
     const translated = j?.responseData?.translatedText;
-    const result = (translated && translated.length > 1) ? translated : text;
-    translateCache.set(text, result);
-    return result;
-  } catch { return text; }
+    if (translated && translated.length > 1) return translated;
+  } catch {}
+  return null;
+}
+async function translateToEnglish(text) {
+  if (!isPersian(text)) return text;
+  if (translateCache.has('en:' + text)) return translateCache.get('en:' + text);
+  const result = (await translateRaw(text, 'fa', 'en')) || text;
+  translateCache.set('en:' + text, result);
+  return result;
+}
+async function translateToPersian(text) {
+  if (!text || isPersian(text)) return text;
+  if (translateCache.has('fa:' + text)) return translateCache.get('fa:' + text);
+  const result = (await translateRaw(text, 'en', 'fa')) || text;
+  translateCache.set('fa:' + text, result);
+  return result;
 }
 
 // ---------- Persian/English keyword extraction + genre map ----------
@@ -131,13 +153,19 @@ async function smartSearch(qRaw) {
   const genreIds = matchGenres(q); // genre words matched against the original text (fa or en)
   const tasks = [];
   const LANG = 'en-US'; // search against English data for much better matching; details() re-fetches fa-IR for display
+  const genrePage = String(1 + Math.floor(Math.random() * 3)); // vary results across repeated same-genre queries
 
   tasks.push(tmdb('/search/movie', { query: qEn, language: LANG, include_adult: false }).then(d => ({ src: 'title', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'title', results: [] })));
   tasks.push(tmdb('/search/tv', { query: qEn, language: LANG, include_adult: false }).then(d => ({ src: 'title', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'title', results: [] })));
+  if (qEn !== q) {
+    // also try the raw untranslated query in case it already contains an English/partial title
+    tasks.push(tmdb('/search/movie', { query: q, language: LANG, include_adult: false }).then(d => ({ src: 'title', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'title', results: [] })));
+    tasks.push(tmdb('/search/tv', { query: q, language: LANG, include_adult: false }).then(d => ({ src: 'title', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'title', results: [] })));
+  }
 
   // theme keyword discovery: look up TMDB keyword ids for a few extracted (English) words
   const kwIds = [];
-  for (const w of words.slice(0, 4)) {
+  for (const w of words.slice(0, 6)) {
     try {
       const d = await tmdb('/search/keyword', { query: w });
       const hit = (d.results || []).find(k => k.name.toLowerCase().includes(w.toLowerCase())) || d.results?.[0];
@@ -149,8 +177,8 @@ async function smartSearch(qRaw) {
     tasks.push(tmdb('/discover/tv', { with_keywords: kwIds.join('|'), language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'keyword', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'keyword', results: [] })));
   }
   if (genreIds.length) {
-    tasks.push(tmdb('/discover/movie', { with_genres: genreIds.join(','), language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'genre', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'genre', results: [] })));
-    tasks.push(tmdb('/discover/tv', { with_genres: genreIds.join(','), language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'genre', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'genre', results: [] })));
+    tasks.push(tmdb('/discover/movie', { with_genres: genreIds.join(','), language: LANG, sort_by: 'popularity.desc', page: genrePage }).then(d => ({ src: 'genre', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'genre', results: [] })));
+    tasks.push(tmdb('/discover/tv', { with_genres: genreIds.join(','), language: LANG, sort_by: 'popularity.desc', page: genrePage }).then(d => ({ src: 'genre', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'genre', results: [] })));
   }
 
   const batches = await Promise.all(tasks);
@@ -261,7 +289,12 @@ app.get('/api/details', async (req, res) => {
     db.stats.topViewed[vk] = (db.stats.topViewed[vk] || { title: d.title || d.name, count: 0 });
     db.stats.topViewed[vk].count++;
     saveDB(db);
-    res.json({ ...d, _similar: (similar.results || []).slice(0, 12).map(x => ({ ...x, media_type: type })), _customLinks: customLinks, _comments: comments, _likes: likes });
+    const titleForSearch = d.title || d.name || '';
+    const iranLinks = titleForSearch ? [
+      { label: 'جستجو در فیلیمو', url: 'https://www.filimo.com/search?query=' + encodeURIComponent(titleForSearch), isSearch: true },
+      { label: 'جستجو در نماوا', url: 'https://www.namava.ir/search?q=' + encodeURIComponent(titleForSearch), isSearch: true },
+    ] : [];
+    res.json({ ...d, _similar: (similar.results || []).slice(0, 12).map(x => ({ ...x, media_type: type })), _customLinks: customLinks, _iranLinks: iranLinks, _comments: comments, _likes: likes });
   } catch (e) { res.status(503).json({ error: e.message }); }
 });
 
@@ -270,13 +303,17 @@ app.get('/api/person', async (req, res) => {
     const { id } = req.query;
     if (!id) return res.status(400).json({ error: 'BAD_PARAMS' });
     const p = await tmdb(`/person/${id}`, { language: 'fa-IR', append_to_response: 'combined_credits,external_ids' });
-    const bioEn = p.biography ? null : await tmdb(`/person/${id}`, { language: 'en-US' }).then(x => x.biography).catch(() => '');
+    let bio = p.biography || '';
+    if (!bio) {
+      bio = await tmdb(`/person/${id}`, { language: 'en-US' }).then(x => x.biography).catch(() => '');
+    }
+    if (bio) bio = await translateToPersian(bio);
     const credits = (p.combined_credits?.cast || [])
       .filter(c => c.poster_path)
       .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
       .slice(0, 24)
       .map(c => ({ id: c.id, media_type: c.media_type, title: c.title || c.name, poster_path: c.poster_path, date: (c.release_date || c.first_air_date || '').slice(0, 4) }));
-    res.json({ ...p, biography: p.biography || bioEn || '', _credits: credits });
+    res.json({ ...p, biography: bio, _credits: credits });
   } catch (e) { res.status(503).json({ error: e.message }); }
 });
 
