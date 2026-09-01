@@ -193,7 +193,6 @@ async function smartSearch(qRaw) {
 
   const wl = words.map(w => w.toLowerCase());
   const scored = [...pool.values()].map(({ item, sources }) => {
-    const text = ((item.title || item.name || '') + ' ' + (item.overview || '')).toLowerCase();
     const titleText = (item.title || item.name || '').toLowerCase();
     const overviewHits = wl.filter(w => (item.overview || '').toLowerCase().includes(w));
     const titleHits = wl.filter(w => titleText.includes(w));
@@ -201,13 +200,14 @@ async function smartSearch(qRaw) {
     const sourceScore = (sources.has('keyword') ? 0.9 : 0) + (sources.has('genre') ? 0.4 : 0) + (sources.has('title') ? 0.6 : 0);
     const pop = Math.min((item.popularity || 0) / 300, 0.3);
     const score = textScore + sourceScore + pop;
+    const match = Math.max(5, Math.min(100, Math.round((score / 2.2) * 100)));
     const clues = [];
     if (titleHits.length) clues.push(`عنوان شامل «${titleHits[0]}»`);
     if (overviewHits.length) clues.push(`خلاصه داستان با «${overviewHits.slice(0, 2).join('، ')}» تطابق دارد`);
     if (sources.has('keyword')) clues.push('از نظر موضوعی با کلیدواژه‌های داستان شما همسو است');
     if (sources.has('genre')) clues.push('ژانر با توضیح شما همخوانی دارد');
     if (!clues.length) clues.push('بر اساس محبوبیت و شباهت کلی پیشنهاد شده');
-    return { item, score, clues };
+    return { item, score, match, clues };
   });
 
   scored.sort((a, b) => b.score - a.score);
@@ -260,7 +260,7 @@ app.get('/api/search', async (req, res) => {
     const pageSize = 20;
     const slice = ranked.slice((page - 1) * pageSize, page * pageSize);
     res.json({
-      results: slice.map(r => ({ ...r.item, _clues: r.clues })),
+      results: slice.map(r => ({ ...r.item, _clues: r.clues, _match: r.match })),
       total_pages: Math.max(1, Math.ceil(ranked.length / pageSize)),
       total_results: ranked.length,
     });
