@@ -279,7 +279,7 @@ app.get('/api/details', async (req, res) => {
   try {
     const { type, id } = req.query;
     if (!['movie', 'tv'].includes(type) || !id) return res.status(400).json({ error: 'BAD_PARAMS' });
-    const d = await tmdb(`/${type}/${id}`, { language: 'fa-IR', append_to_response: 'credits,videos,external_ids,watch/providers' });
+    const d = await tmdb(`/${type}/${id}`, { language: 'fa-IR', append_to_response: 'credits,videos,external_ids,watch/providers,images', include_image_language: 'en,fa,null' });
     const similar = await tmdb(`/${type}/${id}/similar`, { language: 'fa-IR' }).catch(() => ({ results: [] }));
     const customLinks = db.links[key(type, id)] || [];
     const comments = db.comments[key(type, id)] || [];
