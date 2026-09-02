@@ -182,8 +182,37 @@ async function smartSearch(qRaw) {
   }
 
   const batches = await Promise.all(tasks);
+
+  // name-based lookup: if the query matches a real person (director/actor) or a studio/company, pull their works directly
+  const nameBatches = [];
+  try {
+    const [personRes, companyRes] = await Promise.all([
+      tmdb('/search/person', { query: qEn }).catch(() => ({ results: [] })),
+      tmdb('/search/company', { query: qEn }).catch(() => ({ results: [] })),
+    ]);
+    const person = (personRes.results || [])[0];
+    if (person && person.popularity > 0.5) {
+      const credits = await tmdb(`/person/${person.id}/combined_credits`, { language: LANG }).catch(() => null);
+      if (credits) {
+        const isDirector = person.known_for_department === 'Directing';
+        const works = isDirector
+          ? (credits.crew || []).filter(c => c.job === 'Director')
+          : (credits.cast || []);
+        nameBatches.push({ src: 'person', results: works.slice(0, 20).map(x => ({ ...x, media_type: x.media_type })), personName: person.name });
+      }
+    }
+    const company = (companyRes.results || [])[0];
+    if (company) {
+      const [cm, ct] = await Promise.all([
+        tmdb('/discover/movie', { with_companies: company.id, language: LANG, sort_by: 'popularity.desc' }).catch(() => ({ results: [] })),
+        tmdb('/discover/tv', { with_companies: company.id, language: LANG, sort_by: 'popularity.desc' }).catch(() => ({ results: [] })),
+      ]);
+      nameBatches.push({ src: 'company', results: [...cm.results.map(x => ({ ...x, media_type: 'movie' })), ...ct.results.map(x => ({ ...x, media_type: 'tv' }))], companyName: company.name });
+    }
+  } catch {}
+
   const pool = new Map();
-  for (const b of batches) {
+  for (const b of [...batches, ...nameBatches]) {
     for (const item of b.results) {
       const k = item.media_type + ':' + item.id;
       if (!pool.has(k)) pool.set(k, { item, sources: new Set() });
@@ -191,17 +220,21 @@ async function smartSearch(qRaw) {
     }
   }
 
+  const personName = nameBatches.find(b => b.src === 'person')?.personName;
+  const companyName = nameBatches.find(b => b.src === 'company')?.companyName;
   const wl = words.map(w => w.toLowerCase());
   const scored = [...pool.values()].map(({ item, sources }) => {
     const titleText = (item.title || item.name || '').toLowerCase();
     const overviewHits = wl.filter(w => (item.overview || '').toLowerCase().includes(w));
     const titleHits = wl.filter(w => titleText.includes(w));
     const textScore = wl.length ? (overviewHits.length + titleHits.length * 1.5) / wl.length : 0;
-    const sourceScore = (sources.has('keyword') ? 0.9 : 0) + (sources.has('genre') ? 0.4 : 0) + (sources.has('title') ? 0.6 : 0);
+    const sourceScore = (sources.has('keyword') ? 0.9 : 0) + (sources.has('genre') ? 0.4 : 0) + (sources.has('title') ? 0.6 : 0) + (sources.has('person') ? 1.3 : 0) + (sources.has('company') ? 1.1 : 0);
     const pop = Math.min((item.popularity || 0) / 300, 0.3);
     const score = textScore + sourceScore + pop;
     const match = Math.max(5, Math.min(100, Math.round((score / 2.2) * 100)));
     const clues = [];
+    if (sources.has('person') && personName) clues.push(`از آثار ${personName}`);
+    if (sources.has('company') && companyName) clues.push(`محصول استودیوی ${companyName}`);
     if (titleHits.length) clues.push(`عنوان شامل «${titleHits[0]}»`);
     if (overviewHits.length) clues.push(`خلاصه داستان با «${overviewHits.slice(0, 2).join('، ')}» تطابق دارد`);
     if (sources.has('keyword')) clues.push('از نظر موضوعی با کلیدواژه‌های داستان شما همسو است');
