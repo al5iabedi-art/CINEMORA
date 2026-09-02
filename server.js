@@ -32,10 +32,12 @@ function loadDB() {
     const raw = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
     raw.comments = raw.comments || {};
     raw.likes = raw.likes || {};
+    raw.ratings = raw.ratings || {};
+    raw.lists = raw.lists || {};
     raw.texts = { ...DEFAULT_TEXTS, ...(raw.texts || {}) };
     return raw;
   }
-  catch { return { links: {}, stats: { searches: 0, views: 0, queries: [], topViewed: {} }, comments: {}, likes: {}, texts: { ...DEFAULT_TEXTS } }; }
+  catch { return { links: {}, stats: { searches: 0, views: 0, queries: [], topViewed: {} }, comments: {}, likes: {}, ratings: {}, lists: {}, texts: { ...DEFAULT_TEXTS } }; }
 }
 function saveDB(db) {
   try {
@@ -258,9 +260,22 @@ app.get('/api/status', (req, res) => res.json({ connected: !!TMDB_TOKEN }));
 
 app.get('/api/discover', async (req, res) => {
   try {
-    const { type = 'all', sort = 'popularity.desc', min = '0', page = '1' } = req.query;
+    const { type = 'all', sort = 'popularity.desc', min = '0', page = '1', decade = '0' } = req.query;
     const p = { language: 'fa-IR', page, sort_by: sort, 'vote_average.gte': min, include_adult: false };
-    async function one(t, extra = {}) { return tmdb('/discover/' + t, { ...p, ...extra }); }
+    const dec = Number(decade);
+    if (dec) {
+      p['primary_release_date.gte'] = dec + '-01-01';
+      p['primary_release_date.lte'] = (dec + 9) + '-12-31';
+      p['first_air_date.gte'] = dec + '-01-01';
+      p['first_air_date.lte'] = (dec + 9) + '-12-31';
+    }
+    async function one(t, extra = {}) {
+      const params = { ...p, ...extra };
+      // movie uses primary_release_date.*, tv uses first_air_date.* — strip the irrelevant pair per type
+      if (t === 'movie') { delete params['first_air_date.gte']; delete params['first_air_date.lte']; }
+      if (t === 'tv') { delete params['primary_release_date.gte']; delete params['primary_release_date.lte']; }
+      return tmdb('/discover/' + t, params);
+    }
     let results = [], totalPages = 1;
     if (type === 'all') {
       const [m, t] = await Promise.all([one('movie'), one('tv')]);
@@ -317,6 +332,8 @@ app.get('/api/details', async (req, res) => {
     const customLinks = db.links[key(type, id)] || [];
     const comments = db.comments[key(type, id)] || [];
     const likes = db.likes[key(type, id)] || 0;
+    const ratingData = db.ratings[key(type, id)] || { sum: 0, count: 0 };
+    const userRating = ratingData.count ? Math.round((ratingData.sum / ratingData.count) * 10) / 10 : null;
     db.stats.views++;
     const vk = key(type, id);
     db.stats.topViewed[vk] = (db.stats.topViewed[vk] || { title: d.title || d.name, count: 0 });
@@ -327,7 +344,7 @@ app.get('/api/details', async (req, res) => {
       { label: 'جستجو در فیلیمو', url: 'https://www.filimo.com/search?query=' + encodeURIComponent(titleForSearch), isSearch: true },
       { label: 'جستجو در نماوا', url: 'https://www.namava.ir/search?q=' + encodeURIComponent(titleForSearch), isSearch: true },
     ] : [];
-    res.json({ ...d, _similar: (similar.results || []).slice(0, 12).map(x => ({ ...x, media_type: type })), _customLinks: customLinks, _iranLinks: iranLinks, _comments: comments, _likes: likes });
+    res.json({ ...d, _similar: (similar.results || []).slice(0, 12).map(x => ({ ...x, media_type: type })), _customLinks: customLinks, _iranLinks: iranLinks, _comments: comments, _likes: likes, _userRating: userRating, _ratingCount: ratingData.count });
   } catch (e) { res.status(503).json({ error: e.message }); }
 });
 
@@ -348,6 +365,88 @@ app.get('/api/person', async (req, res) => {
       .map(c => ({ id: c.id, media_type: c.media_type, title: c.title || c.name, poster_path: c.poster_path, date: (c.release_date || c.first_air_date || '').slice(0, 4) }));
     res.json({ ...p, biography: bio, _credits: credits });
   } catch (e) { res.status(503).json({ error: e.message }); }
+});
+
+// ---------- community star ratings ----------
+app.post('/api/rate', (req, res) => {
+  const { type, id, stars } = req.body || {};
+  const s = Number(stars);
+  if (!['movie', 'tv'].includes(type) || !id || !(s >= 1 && s <= 5)) return res.status(400).json({ error: 'BAD_PARAMS' });
+  const k = key(type, id);
+  db.ratings[k] = db.ratings[k] || { sum: 0, count: 0 };
+  db.ratings[k].sum += s;
+  db.ratings[k].count += 1;
+  saveDB(db);
+  const avg = Math.round((db.ratings[k].sum / db.ratings[k].count) * 10) / 10;
+  res.json({ ok: true, average: avg, count: db.ratings[k].count });
+});
+
+// ---------- surprise me: one random high-quality pick ----------
+app.get('/api/random', async (req, res) => {
+  try {
+    const type = Math.random() > 0.5 ? 'movie' : 'tv';
+    const page = 1 + Math.floor(Math.random() * 20);
+    const d = await tmdb('/discover/' + type, { language: 'fa-IR', sort_by: 'popularity.desc', 'vote_average.gte': 7, 'vote_count.gte': 200, page });
+    const list = d.results || [];
+    if (!list.length) return res.status(503).json({ error: 'NO_RESULTS' });
+    const pick = list[Math.floor(Math.random() * list.length)];
+    res.json({ ...pick, media_type: type });
+  } catch (e) { res.status(503).json({ error: e.message }); }
+});
+
+// ---------- next-episode tracker ----------
+app.get('/api/next-episode', async (req, res) => {
+  try {
+    const { id, season, episode } = req.query;
+    if (!id || !season || !episode) return res.status(400).json({ error: 'BAD_PARAMS' });
+    const s = Number(season), e = Number(episode);
+    const seasonData = await tmdb(`/tv/${id}/season/${s}`, { language: 'fa-IR' });
+    const episodeCount = (seasonData.episodes || []).length;
+    if (e < episodeCount) {
+      const next = seasonData.episodes[e]; // zero-indexed, so index e = episode e+1
+      return res.json({ season: s, episode: e + 1, name: next?.name || '', overview: next?.overview || '' });
+    }
+    // try next season
+    const nextSeasonData = await tmdb(`/tv/${id}/season/${s + 1}`, { language: 'fa-IR' }).catch(() => null);
+    if (nextSeasonData && (nextSeasonData.episodes || []).length) {
+      const next = nextSeasonData.episodes[0];
+      return res.json({ season: s + 1, episode: 1, name: next?.name || '', overview: next?.overview || '' });
+    }
+    res.json({ season: null, episode: null, finished: true });
+  } catch (e) { res.status(503).json({ error: e.message }); }
+});
+
+// ---------- shareable personal lists ----------
+app.post('/api/lists', (req, res) => {
+  const { name } = req.body || {};
+  const id = crypto.randomBytes(6).toString('hex');
+  db.lists[id] = { name: (name || 'لیست من').toString().slice(0, 80), items: [], createdAt: Date.now() };
+  saveDB(db);
+  res.json({ ok: true, id, list: db.lists[id] });
+});
+app.get('/api/lists/:id', (req, res) => {
+  const list = db.lists[req.params.id];
+  if (!list) return res.status(404).json({ error: 'NOT_FOUND' });
+  res.json({ id: req.params.id, ...list });
+});
+app.post('/api/lists/:id/items', (req, res) => {
+  const list = db.lists[req.params.id];
+  if (!list) return res.status(404).json({ error: 'NOT_FOUND' });
+  const { type, id, title, poster_path } = req.body || {};
+  if (!['movie', 'tv'].includes(type) || !id) return res.status(400).json({ error: 'BAD_PARAMS' });
+  if (!list.items.some(x => x.type === type && x.id === id)) {
+    list.items.push({ type, id, title: title || '', poster_path: poster_path || '', addedAt: Date.now() });
+    saveDB(db);
+  }
+  res.json({ ok: true, list });
+});
+app.delete('/api/lists/:id/items', (req, res) => {
+  const list = db.lists[req.params.id];
+  if (!list) return res.status(404).json({ error: 'NOT_FOUND' });
+  const { type, id } = req.body || {};
+  list.items = list.items.filter(x => !(x.type === type && x.id === id));
+  saveDB(db);
+  res.json({ ok: true, list });
 });
 
 // ---------- likes & comments (public, no admin needed) ----------
