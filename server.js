@@ -139,8 +139,9 @@ const GENRE_MAP = [
 ];
 function extractKeywords(q) {
   const words = q.replace(/[،,.!?؟«»"'()]/g, ' ').split(/\s+/).map(w => w.trim()).filter(w => w.length > 1 && !STOP.has(w.toLowerCase()));
-  return [...new Set(words)].slice(0, 10);
+  return [...new Set(words)].slice(0, 16); // use much more of the full description, not just the first couple of words
 }
+function stem(w) { return w.toLowerCase().replace(/(ing|ed|es|s)$/i, ''); } // crude stemming so "cancer"/"cancerous" style variants still match
 function matchGenres(q) {
   const ids = new Set();
   GENRE_MAP.forEach(([re, id]) => { if (re.test(q)) ids.add(id); });
@@ -165,18 +166,30 @@ async function smartSearch(qRaw) {
     tasks.push(tmdb('/search/tv', { query: q, language: LANG, include_adult: false }).then(d => ({ src: 'title', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'title', results: [] })));
   }
 
-  // theme keyword discovery: look up TMDB keyword ids for a few extracted (English) words
+  // theme keyword discovery: look up TMDB keyword ids using both single words and 2-word phrases,
+  // pulling from across the WHOLE description (not just the first couple of words)
   const kwIds = [];
-  for (const w of words.slice(0, 6)) {
+  const phrases = [];
+  for (let i = 0; i < words.length - 1; i++) phrases.push(words[i] + ' ' + words[i + 1]);
+  const lookupTerms = [...phrases.slice(0, 6), ...words.slice(0, 12)];
+  for (const w of lookupTerms) {
     try {
       const d = await tmdb('/search/keyword', { query: w });
-      const hit = (d.results || []).find(k => k.name.toLowerCase().includes(w.toLowerCase())) || d.results?.[0];
-      if (hit) kwIds.push(hit.id);
+      const wLow = w.toLowerCase(), wStem = stem(w);
+      // only accept a real match — don't fall back to a random first result, that injects noise unrelated to the sentence
+      const hit = (d.results || []).find(k => {
+        const nameLow = k.name.toLowerCase();
+        return nameLow.includes(wLow) || wLow.includes(nameLow) || nameLow.includes(wStem);
+      });
+      if (hit && !kwIds.includes(hit.id)) kwIds.push(hit.id);
     } catch {}
   }
   if (kwIds.length) {
-    tasks.push(tmdb('/discover/movie', { with_keywords: kwIds.join('|'), language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'keyword', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'keyword', results: [] })));
-    tasks.push(tmdb('/discover/tv', { with_keywords: kwIds.join('|'), language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'keyword', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'keyword', results: [] })));
+    // OR across all matched keywords so any part of the description can surface a candidate,
+    // but cap the count so any single keyword can't dominate the pool
+    const kwGroup = kwIds.slice(0, 10).join('|');
+    tasks.push(tmdb('/discover/movie', { with_keywords: kwGroup, language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'keyword', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'keyword', results: [] })));
+    tasks.push(tmdb('/discover/tv', { with_keywords: kwGroup, language: LANG, sort_by: 'popularity.desc' }).then(d => ({ src: 'keyword', results: d.results.map(x => ({ ...x, media_type: 'tv' })) })).catch(() => ({ src: 'keyword', results: [] })));
   }
   if (genreIds.length) {
     tasks.push(tmdb('/discover/movie', { with_genres: genreIds.join(','), language: LANG, sort_by: 'popularity.desc', page: genrePage }).then(d => ({ src: 'genre', results: d.results.map(x => ({ ...x, media_type: 'movie' })) })).catch(() => ({ src: 'genre', results: [] })));
@@ -225,15 +238,19 @@ async function smartSearch(qRaw) {
   const personName = nameBatches.find(b => b.src === 'person')?.personName;
   const companyName = nameBatches.find(b => b.src === 'company')?.companyName;
   const wl = words.map(w => w.toLowerCase());
+  const wlStems = wl.map(stem);
   const scored = [...pool.values()].map(({ item, sources }) => {
     const titleText = (item.title || item.name || '').toLowerCase();
-    const overviewHits = wl.filter(w => (item.overview || '').toLowerCase().includes(w));
-    const titleHits = wl.filter(w => titleText.includes(w));
+    const overviewText = (item.overview || '').toLowerCase();
+    const overviewHits = wl.filter((w, i) => overviewText.includes(w) || overviewText.includes(wlStems[i]));
+    const titleHits = wl.filter((w, i) => titleText.includes(w) || titleText.includes(wlStems[i]));
+    // textScore now reflects how much of the WHOLE description matched, not just a word or two
     const textScore = wl.length ? (overviewHits.length + titleHits.length * 1.5) / wl.length : 0;
-    const sourceScore = (sources.has('keyword') ? 0.9 : 0) + (sources.has('genre') ? 0.4 : 0) + (sources.has('title') ? 0.6 : 0) + (sources.has('person') ? 1.3 : 0) + (sources.has('company') ? 1.1 : 0);
+    const sourceScore = (sources.has('keyword') ? 0.9 : 0) + (sources.has('genre') ? 0.25 : 0) + (sources.has('title') ? 0.6 : 0) + (sources.has('person') ? 1.3 : 0) + (sources.has('company') ? 1.1 : 0);
     const pop = Math.min((item.popularity || 0) / 300, 0.3);
-    const score = textScore + sourceScore + pop;
-    const match = Math.max(5, Math.min(100, Math.round((score / 2.2) * 100)));
+    // full-text overlap is weighted more heavily than a single genre/keyword signal
+    const score = textScore * 1.6 + sourceScore + pop;
+    const match = Math.max(5, Math.min(100, Math.round((score / 2.6) * 100)));
     const clues = [];
     if (sources.has('person') && personName) clues.push(`از آثار ${personName}`);
     if (sources.has('company') && companyName) clues.push(`محصول استودیوی ${companyName}`);
